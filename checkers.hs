@@ -46,28 +46,37 @@ checkLegalMove :: Board -> Pos -> Pos -> Bool
 checkLegalMove board (startX, startY) (x,y) 
     | not (inBorder board (x,y)) = False
     | endCell /= (No,Empty) = False
-    | startCell == (No,Empty) = False
-    | otherwise = case startCell of 
-                    (_, Normal) -> checkLegalNormalPieceMove 
+    | currentCell == (No,Empty) = False
+    | posTake = checkLegalTake board (startX, startY) (x, y)
+    | allTakesOnPos board (startX, startY) /= [] = False
+    | otherwise = case currentCell of 
+                    (Black, Normal) -> legalNormalBlackMove
+                    (White, Normal) -> legalNormalWhiteMove
                     (_, King) -> False
     where 
         endCell = board !! y !! x
-        startCell = board !! startY !! startX
-        checkLegalNormalPieceMove = abs (x - startX) == 1 && abs (y - startY) == 1
+        currentCell = board !! startY !! startX
+        posTake = abs (startX - x) > 1 && abs(startY - y) > 1
+        legalNormalBlackMove = startX - x == -1 && startY - y == -1 || startX - x == 1 && startY - y == -1
+        legalNormalWhiteMove = startX - x == -1 && startY - y == 1  || startX - x == 1 && startY - y == 1
 
-allMovesOnPos :: Board -> Pos -> [Move]
-allMovesOnPos board (x, y) = [ [(x, y), (nx, ny)] | (dx, dy) <- direction c , let nx = x + dx , let ny = y + dy , checkLegalMove board (x, y) (nx, ny)]
-    where 
-        c = fst (board !! y !! x)
-        direction Black = [(-1, 1), (1, 1)]
-        direction White = [(-1, -1) , (1, -1)]
-
-allNormalMoves :: Board -> Color -> [Move]
-allNormalMoves board c = concatMap (allMovesOnPos board) playerPos
+checkLegalTake :: Board -> Pos -> Pos -> Bool
+checkLegalTake board (sx, sy) (x, y) = isOpponent (enemyCell) (fst (board !! y !! x))
     where
-        playerPos = [(x, y) | y <- [0..7] , x <- [0..7] , isPlayer (board !! y !! x) c]
-        isPlayer (c, Normal) color = c == color
-        isPlayer _ _ = False
+      ex = x + (sx - x) `div` 2 
+      ey = y + (sy - y) `div` 2 
+      enemyCell = board !! ey !! ex 
+      isOpponent (c, _) playerColor = c /= No && c /= playerColor 
+
+executeTake :: Board -> Pos -> Pos -> Board
+executeTake board (sx, sy) (ex, ey) = changeBoard sy sx (No, Empty) $ changeBoard ey ex (startColor, startPiece) $ changeBoard (sy + dy) (sx + dx) (No, Empty) board
+    where
+        (startColor, startPiece) = board !! sy !! sx
+        dx = (ex - sx) `div` 2
+        dy = (ey - sy) `div` 2
+
+executeMove :: Board -> Pos -> Pos -> Board
+executeMove board (startX, startY) (endX, endY) = changeBoard endY endX (board !! startY !! startX) $ changeBoard startY startX (No, Empty) board
 
 allTakesOnPos :: Board -> Pos -> [Move]
 allTakesOnPos board (x, y) = 
@@ -85,15 +94,21 @@ allTakesOnPos board (x, y) =
         enemyCell nx ny = board !! ny !! nx
         isOpponent (c, _) playerColor = c /= No && c /= playerColor
 
-executeTake :: Board -> Pos -> Pos -> Board
-executeTake board (sx, sy) (ex, ey) = changeBoard sy sx (No, Empty) $ changeBoard ey ex (startColor, startPiece) $ changeBoard (sy + dy) (sx + dx) (No, Empty) board
-    where
-        (startColor, startPiece) = board !! sy !! sx
-        dx = (ex - sx) `div` 2
-        dy = (ey - sy) `div` 2
+---ENGING STUFF---
 
-executeMove :: Board -> Pos -> Pos -> Board
-executeMove board (startX, startY) (endX, endY) = changeBoard endY endX (board !! startY !! startX) $ changeBoard startY startX (No, Empty) board
+allMovesOnPos :: Board -> Pos -> [Move]
+allMovesOnPos board (x, y) = [ [(x, y), (nx, ny)] | (dx, dy) <- direction c , let nx = x + dx , let ny = y + dy , checkLegalMove board (x, y) (nx, ny)]
+    where 
+        c = fst (board !! y !! x)
+        direction Black = [(-1, 1), (1, 1)]
+        direction White = [(-1, -1) , (1, -1)]
+
+allNormalMoves :: Board -> Color -> [Move]
+allNormalMoves board c = concatMap (allMovesOnPos board) playerPos
+    where
+        playerPos = [(x, y) | y <- [0..7] , x <- [0..7] , isPlayer (board !! y !! x) c]
+        isPlayer (c, Normal) color = c == color
+        isPlayer _ _ = False
 
 findChains :: Board -> Pos -> Move -> [Move]
 findChains board pos currentC = 
@@ -214,27 +229,46 @@ testBoard = [
            [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)]
         ]
 
+test = [
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (White, Normal), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (Black, Normal), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)],
+           [(No, Empty)    , (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty), (No, Empty)]
+        ]
+
 main = do 
-    printBoard testBoard
-    print (allPlays testBoard Black)
-    print (evalBoard testBoard Black)
-    print (findBestMove testBoard Black 1)
-    print (findBestMove testBoard Black 2)
-    print (findBestMove testBoard Black 3)
-    print (findBestMove testBoard Black 4)
-    print (findBestMove testBoard Black 5)
-    print (findBestMove testBoard Black 6)
-    print (findBestMove testBoard Black 7)
-    print (findBestMove testBoard Black 8)
-    print (findBestMove testBoard Black 9)
-    print (findBestMove testBoard Black 10)
-    print (findBestMove testBoard Black 11)
-    print (findBestMove testBoard Black 12)
-    print (findBestMove testBoard Black 13)
-    print (findBestMove testBoard Black 14)
-    print (findBestMove testBoard Black 15)
-    print (findBestMove testBoard Black 16)
-    print (findBestMove testBoard Black 17)
-    print (findBestMove testBoard Black 18)
-    print (findBestMove testBoard Black 19)
-    print (findBestMove testBoard Black 20)
+    printBoard test
+    print ("take")
+    print (checkLegalMove test (2,2) (4,4)) -- true
+    print (checkLegalMove test (2,2) (0,0)) -- true
+
+    print ("normal move")
+    print (checkLegalMove test (1, 1) (0, 2)) -- true
+    print (checkLegalMove test (1, 1) (2, 2)) -- false
+    print (checkLegalMove test (1, 1) (0, 0)) -- false
+    print (checkLegalMove test (1, 1) (2, 0)) -- false
+
+    print ("normal move")
+    print (checkLegalMove test (3, 3) (2, 4)) -- true
+    print (checkLegalMove test (3, 3) (4, 4)) -- true
+    print (checkLegalMove test (3, 3) (2, 2)) -- false
+    print (checkLegalMove test (3, 3) (4, 2)) -- false
+
+    print ("test no move bc take")
+    print (checkLegalMove test (2, 2) (3, 1)) -- false
+    -- print (allPlays testBoard Black)
+    -- print (evalBoard testBoard Black)
+    -- print (findBestMove testBoard Black 1)
+    -- print (findBestMove testBoard Black 2)
+    -- print (findBestMove testBoard Black 3)
+    -- print (findBestMove testBoard Black 4)
+    -- print (findBestMove testBoard Black 5)
+    -- print (findBestMove testBoard Black 6)
+    -- print (findBestMove testBoard Black 7)
+    -- print (findBestMove testBoard Black 8)
+    -- print (findBestMove testBoard Black 9)
+    -- print (findBestMove testBoard Black 10)
